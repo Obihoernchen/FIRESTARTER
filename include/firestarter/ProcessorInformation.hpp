@@ -42,6 +42,10 @@ public:
   /// Getter for the clockrate in Hz
   [[nodiscard]] virtual auto clockrate() const -> uint64_t { return Clockrate; }
 
+  /// Getter for the core frequency in Hz that is shown to the user. By default this is the clockrate. Architectures
+  /// whose clockrate is the frequency of a timer that is independent of the core clock override this.
+  [[nodiscard]] virtual auto frequency() const -> uint64_t { return clockrate(); }
+
   /// Get the current hardware timestamp
   [[nodiscard]] virtual auto timestamp() const -> uint64_t = 0;
 

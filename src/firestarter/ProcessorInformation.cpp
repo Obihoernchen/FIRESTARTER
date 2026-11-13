@@ -45,12 +45,19 @@ void ProcessorInformation::print() const {
     Ss << Entry << " ";
   }
 
+  std::stringstream FrequencySs;
+  if (frequency() == 0) {
+    FrequencySs << "unknown";
+  } else {
+    FrequencySs << frequency() / 1000000 << " MHz";
+  }
+
   log::info() << "  processor characteristics:\n"
               << "    architecture:       " << architecture() << "\n"
               << "    vendor:             " << vendor() << "\n"
               << "    processor-name:     " << processorName() << "\n"
               << "    model:              " << model() << "\n"
-              << "    frequency:          " << clockrate() / 1000000 << " MHz\n"
+              << "    frequency:          " << FrequencySs.str() << "\n"
               << "    supported features: " << Ss.str();
 }
 

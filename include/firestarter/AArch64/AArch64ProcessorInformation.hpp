@@ -35,8 +35,12 @@ public:
   /// Getter for the list of CPU features
   [[nodiscard]] auto features() const -> std::list<std::string> const& override { return this->FeatureList; }
 
-  /// Getter for the clockrate in Hz
+  /// Getter for the clockrate in Hz. This is the frequency of the generic timer (CNTFRQ_EL0) that is used for
+  /// timestamp(), not the core clock.
   [[nodiscard]] auto clockrate() const -> uint64_t override;
+
+  /// Getter for the core frequency in Hz as read from cpufreq. Zero if it is unknown.
+  [[nodiscard]] auto frequency() const -> uint64_t override { return ProcessorInformation::clockrate(); }
 
   /// Get the current hardware timestamp
   [[nodiscard]] auto timestamp() const -> uint64_t override;
