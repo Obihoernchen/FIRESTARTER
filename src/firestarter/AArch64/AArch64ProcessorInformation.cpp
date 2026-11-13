@@ -28,6 +28,7 @@
 #include <chrono>
 #include <cstdint>
 #include <ctime>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <thread>
@@ -37,6 +38,17 @@
 #endif
 
 namespace firestarter::aarch64 {
+
+namespace {
+
+/// Format an unknown MIDR_EL1 field as "Unknown (0x...)" with the value in hexadecimal.
+auto unknownMidrField(unsigned Value) -> std::string {
+  std::stringstream Ss;
+  Ss << "Unknown (0x" << std::hex << std::uppercase << Value << ")";
+  return Ss.str();
+}
+
+} // namespace
 
 #if defined(__APPLE__)
 // On Apple Silicon, MIDR_EL1 is not accessible from user space (it traps with
@@ -66,7 +78,7 @@ AArch64ProcessorInformation::AArch64ProcessorInformation()
                            std::make_unique<AArch64CpuModel>(midrImplementer(), midrPartNum(), midrRevision()))
     , CpuInfo(asmjit::CpuInfo::host())
     , Vendor(implementerToString(midrImplementer()))
-    , ProcessorName(partNumToString(midrPartNum())) {
+    , ProcessorName(partNumToString(midrImplementer(), midrPartNum())) {
 
   {
     std::stringstream Ss;
@@ -188,11 +200,50 @@ std::string AArch64ProcessorInformation::implementerToString(unsigned Implemente
   case 0xC0:
     return "Ampere";
   default:
-    return "Unknown (0x" + std::to_string(Implementer) + ")";
+    return unknownMidrField(Implementer);
   }
 }
 
-std::string AArch64ProcessorInformation::partNumToString(unsigned PartNum) {
+std::string AArch64ProcessorInformation::partNumToString(unsigned Implementer, unsigned PartNum) {
+  // Part numbers are assigned by each implementer, so the same number means different cores for different
+  // implementers.
+  switch (Implementer) {
+  case 0x41: // ARM
+    break;
+  case 0x46: // Fujitsu
+    if (PartNum == 0x001) {
+      return "A64FX";
+    }
+    return unknownMidrField(PartNum);
+  case 0x48: // HiSilicon
+    if (PartNum == 0xD01) {
+      return "TaiShan v110";
+    }
+    return unknownMidrField(PartNum);
+  case 0x4E: // Nvidia
+    switch (PartNum) {
+    case 0x000:
+      return "Denver";
+    case 0x003:
+      return "Denver 2";
+    case 0x004:
+      return "Carmel";
+    default:
+      return unknownMidrField(PartNum);
+    }
+  case 0xC0: // Ampere
+    switch (PartNum) {
+    case 0xAC3:
+      return "AmpereOne";
+    case 0xAC4:
+      return "AmpereOne AC04";
+    default:
+      return unknownMidrField(PartNum);
+    }
+  default:
+    return unknownMidrField(PartNum);
+  }
+
   switch (PartNum) {
   case 0xD00:
     return "Foundation";
@@ -275,7 +326,7 @@ std::string AArch64ProcessorInformation::partNumToString(unsigned PartNum) {
   case 0xD90:
     return "C1-Premium";
   default:
-    return "Unknown (0x" + std::to_string(PartNum) + ")";
+    return unknownMidrField(PartNum);
   }
 }
 

@@ -57,8 +57,10 @@ private:
   static unsigned midrRevision();
   /// Convert an implementer code to a vendor string.
   static std::string implementerToString(unsigned Implementer);
-  /// Convert a part number to a processor name string.
-  static std::string partNumToString(unsigned PartNum);
+  /// Convert a part number to a processor name string. Part numbers are only unique per implementer.
+  /// \arg Implementer The implementer field of MIDR_EL1.
+  /// \arg PartNum The part number field of MIDR_EL1.
+  static std::string partNumToString(unsigned Implementer, unsigned PartNum);
   /// Fallback: measure the generic timer counter frequency in Hz when
   /// CNTFRQ_EL0 is not populated by firmware.
   auto measureClockrate() const -> uint64_t;
