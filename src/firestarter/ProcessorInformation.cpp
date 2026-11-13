@@ -20,6 +20,7 @@
  *****************************************************************************/
 
 #include "firestarter/ProcessorInformation.hpp"
+#include "firestarter/Constants.hpp"
 #include "firestarter/CpuFeatures.hpp"
 #include "firestarter/CpuModel.hpp"
 #include "firestarter/Logging/Log.hpp"
@@ -95,17 +96,19 @@ ProcessorInformation::ProcessorInformation(std::string Architecture, std::unique
       }
     }
 
-    if (Vendor.empty()) {
-      log::warn() << "Could determine vendor from /proc/cpuinfo";
+    // /proc/cpuinfo does not contain the vendor and the processor name on AArch64. They are derived from MIDR_EL1
+    // there, so we do not need to warn about them.
+    if constexpr (!firestarter::OptionalFeatures.IsAArch64) {
+      if (Vendor.empty()) {
+        log::warn() << "Could not determine vendor from /proc/cpuinfo";
+      }
+
+      if (ProcessorName.empty()) {
+        log::warn() << "Could not determine processor-name from /proc/cpuinfo";
+      }
     }
 
-    if (ProcessorName.empty()) {
-      log::warn() << "Could determine processor-name from /proc/cpuinfo";
-    }
-
-    if (ClockrateStr == "0") {
-      firestarter::log::warn() << "Can't determine clockrate from /proc/cpuinfo";
-    } else {
+    if (ClockrateStr != "0") {
       firestarter::log::trace() << "Clockrate from /proc/cpuinfo is " << ClockrateStr;
       Clockrate = static_cast<uint64_t>(1000000U) * std::stoi(ClockrateStr);
     }
@@ -137,6 +140,11 @@ ProcessorInformation::ProcessorInformation(std::string Architecture, std::unique
       }
 
       Clockrate = static_cast<uint64_t>(1000U) * std::stoi(ClockrateStr);
+    }
+
+    // Only warn if neither /proc/cpuinfo nor cpufreq provide the clockrate.
+    if (Clockrate == 0) {
+      firestarter::log::warn() << "Can't determine clockrate from /proc/cpuinfo or cpufreq";
     }
   }
 #endif
