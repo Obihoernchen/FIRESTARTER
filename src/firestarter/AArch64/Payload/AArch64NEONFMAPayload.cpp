@@ -70,7 +70,13 @@ auto AArch64NEONFMAPayload::compilePayload(const firestarter::payload::PayloadSe
 
   Stats.Flops *= Repetitions;
   Stats.Bytes *= Repetitions;
-  Stats.Instructions = Repetitions * Sequence.size() * 2 + 4;
+
+  // A REG group emits 4 FMAs and one EOR. Each memory group emits one load or store and one address update. The loop
+  // end adds 5 instructions (iteration counter, L1 address reset, load, compare and branch of the load variable).
+  for (const auto& Item : Sequence) {
+    Stats.Instructions += (Item == "REG") ? 5 : 2;
+  }
+  Stats.Instructions = Stats.Instructions * Repetitions + 5;
 
   // calculate the buffer sizes
   const auto L1iCacheSize = Settings.instructionCacheSizePerThread();
