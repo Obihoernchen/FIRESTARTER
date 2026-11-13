@@ -24,8 +24,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
+#include <map>
 #include <optional>
+#include <set>
 #include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -35,6 +40,64 @@
 #endif
 
 namespace firestarter {
+
+namespace {
+
+/// Check if the CPU kinds reported by hwloc describe a hybrid processor. hwloc also creates separate CPU kinds for
+/// cores that differ only by a few percent in their maximum frequency or capacity (e.g., the individually binned cores
+/// of NVIDIA Grace). We consider the processor hybrid if the kinds have different core types (e.g., Intel P- and
+/// E-cores) or if their maximum frequency or capacity differs by more than 10 % (e.g., Arm big.LITTLE or AMD Zen 5 and
+/// Zen 5c). If hwloc provides none of this information, we assume a hybrid processor.
+/// \arg Topology The loaded hwloc topology.
+/// \arg NrCpukinds The number of CPU kinds reported by hwloc.
+/// \returns true if the processor is hybrid.
+auto isHybridCpu(hwloc_topology_t Topology, int NrCpukinds) -> bool {
+  constexpr double HybridSpreadThreshold = 1.1;
+
+  std::set<std::string> CoreTypes;
+  // Minimum and maximum value for each numeric info (FrequencyMaxMHz, LinuxCapacity) over all CPU kinds.
+  std::map<std::string, std::pair<double, double>> NumericInfoRange;
+
+  for (auto Kind = 0; Kind < NrCpukinds; Kind++) {
+    unsigned NrInfos = 0;
+    hwloc_info_s* Infos = nullptr;
+    if (hwloc_cpukinds_get_info(Topology, Kind, nullptr, nullptr, &NrInfos, &Infos, 0) != 0) {
+      return true;
+    }
+
+    for (auto I = 0U; I < NrInfos; I++) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      const auto& Info = Infos[I];
+      const std::string Name = Info.name;
+
+      if (Name == "CoreType") {
+        CoreTypes.emplace(Info.value);
+      } else if (Name == "FrequencyMaxMHz" || Name == "LinuxCapacity") {
+        const auto Value = std::strtod(Info.value, nullptr);
+        auto [It, Inserted] = NumericInfoRange.try_emplace(Name, Value, Value);
+        if (!Inserted) {
+          It->second.first = (std::min)(It->second.first, Value);
+          It->second.second = (std::max)(It->second.second, Value);
+        }
+      }
+    }
+  }
+
+  if (CoreTypes.size() > 1) {
+    return true;
+  }
+
+  for (const auto& [Name, Range] : NumericInfoRange) {
+    const auto& [Min, Max] = Range;
+    if (Min > 0 && Max / Min > HybridSpreadThreshold) {
+      return true;
+    }
+  }
+
+  return CoreTypes.empty() && NumericInfoRange.empty();
+}
+
+} // namespace
 
 CPUTopology::CPUTopology() {
   hwloc_topology_init(&Topology);
@@ -58,7 +121,11 @@ CPUTopology::CPUTopology() {
     log::trace() << "Number of CPU kinds:" << NrCpukinds;
   }
   if (NrCpukinds > 1) {
-    log::warn() << "FIRESTARTER detected a hybrid CPU set-up";
+    if (isHybridCpu(Topology, NrCpukinds)) {
+      log::warn() << "FIRESTARTER detected a hybrid CPU set-up";
+    } else {
+      log::trace() << "The CPU kinds differ only slightly in frequency or capacity. Not treating the CPU as hybrid.";
+    }
   }
 }
 
